@@ -1,0 +1,9 @@
+{
+  "pansou_api_url": "http://154.12.83.97:8085",
+  "ziliao_api_url": "https://www.ziliao.xyz",
+  "ziliao_api_path": "/api/open/transfer",
+  "ziliao_api_key": "your_api_key_here",
+  "max_results": 50,
+  "timeout": 30
+}
+
