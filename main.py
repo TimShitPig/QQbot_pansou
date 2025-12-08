@@ -1,6 +1,6 @@
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
+from astrbot.api import logger, AstrBotConfig
 from astrbot.core.star.filter.event_message_type import EventMessageType
 import json
 import re
@@ -10,58 +10,25 @@ from datetime import datetime, timedelta
 import os
 from pathlib import Path
 
-# 配置文件路径
+# 配置文件路径（保留用于兼容旧版本）
 CONFIG_FILE = Path(__file__).parent / "config.json"
-
-# 加载配置
-
-def load_config():
-    default_config = {
-        "pansou_api_url": "http://154.12.83.97:8085",
-        "ziliao_api_url": "https://www.ziliao.xyz",
-        "ziliao_api_key": "",
-        "ziliao_api_path": "/api/open/transfer",
-        "max_results": 50,
-        "timeout": 30,
-        "group_owner_id": ""
-    }
-    
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                user_config = json.load(f)
-            default_config.update(user_config)
-        except Exception as e:
-            logger.error(f"[PanSearch] 加载配置文件失败: {e}")
-    else:
-        # 保存默认配置
-        try:
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(default_config, f, ensure_ascii=False, indent=4)
-            logger.info(f"[PanSearch] 默认配置文件已创建: {CONFIG_FILE}")
-        except Exception as e:
-            logger.error(f"[PanSearch] 创建默认配置文件失败: {e}")
-    
-    return default_config
 
 @register("helloworld", "YourName", "一个集成了网盘搜索转存功能的插件", "2.0.0")
 class MyPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
-        
-        # 加载配置
-        self.config = load_config()
+        self.config = config
         
         # 初始化网盘搜索转存功能
-        self.pansou_api_url = self.config.get("pansou_api_url", "http://localhost:8888")
+        self.pansou_api_url = self.config.get("pansou_api_url", "http://154.12.83.97:8085")
         self.ziliao_api_url = self.config.get("ziliao_api_url", "https://www.ziliao.xyz")
         self.ziliao_api_key = self.config.get("ziliao_api_key", "")
         self.ziliao_api_path = self.config.get("ziliao_api_path", "/api/open/transfer")
         self.max_results = self.config.get("max_results", 50)
         self.timeout = self.config.get("timeout", 30)
         self.group_owner_id = self.config.get("group_owner_id", "")
-        self.page_size = 6  # 每页显示6个结果
-        self.links_per_type = 3  # 每种网盘每轮显示2条
+        self.page_size = self.config.get("page_size", 6)  # 每页显示6个结果
+        self.links_per_type = self.config.get("links_per_type", 3)  # 每种网盘每轮显示2条
         
         # 确保 API URL 不以 / 结尾
         self.pansou_api_url = self.pansou_api_url.rstrip('/')

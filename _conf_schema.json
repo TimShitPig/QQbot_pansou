@@ -1,0 +1,56 @@
+{
+  "pansou_api_url": {
+    "description": "网盘搜索API地址",
+    "type": "string",
+    "default": "http://154.12.83.97:8085",
+    "hint": "资源搜索的API服务地址，可自定义修改"
+  },
+  "ziliao_api_url": {
+    "description": "资源转存API地址",
+    "type": "string",
+    "default": "https://www.ziliao.xyz",
+    "hint": "资源转存的API服务地址，可自定义修改"
+  },
+  "ziliao_api_key": {
+    "description": "资源转存API密钥",
+    "type": "string",
+    "default": "",
+    "hint": "部分API可能需要密钥才能使用"
+  },
+  "ziliao_api_path": {
+    "description": "资源转存API路径",
+    "type": "string",
+    "default": "/api/open/transfer",
+    "hint": "API接口的具体路径"
+  },
+  "max_results": {
+    "description": "最大搜索结果数",
+    "type": "int",
+    "default": 50,
+    "hint": "搜索时返回的最大结果数量"
+  },
+  "timeout": {
+    "description": "API请求超时时间（秒）",
+    "type": "int",
+    "default": 30,
+    "hint": "API请求的超时时间设置"
+  },
+  "group_owner_id": {
+    "description": "群主QQ号",
+    "type": "string",
+    "default": "",
+    "hint": "用于在搜索失败时@群主"
+  },
+  "page_size": {
+    "description": "每页显示结果数量",
+    "type": "int",
+    "default": 6,
+    "hint": "搜索结果每页显示的数量"
+  },
+  "links_per_type": {
+    "description": "每种网盘显示链接数量",
+    "type": "int",
+    "default": 3,
+    "hint": "每种网盘类型在结果中显示的链接数量"
+  }
+}
