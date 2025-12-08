@@ -199,9 +199,14 @@ class MyPlugin(Star):
         is_at_me = False
         try:
             # 获取机器人自身信息
-            bot_info = event.bot_info
-            bot_id = str(bot_info.get('user_id', ''))
-            bot_name = bot_info.get('nickname', '')
+            if hasattr(event, 'bot'):
+                bot = event.bot
+                bot_id = str(bot.get('user_id', ''))
+                bot_name = bot.get('nickname', '')
+            else:
+                # 如果没有bot属性，尝试使用其他方式获取机器人信息
+                bot_id = ''
+                bot_name = ''
             
             # 检查消息链中是否有@机器人的元素
             if message_chain:
