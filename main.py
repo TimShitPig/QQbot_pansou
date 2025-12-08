@@ -405,19 +405,57 @@ class MyPlugin(Star):
         # 按类型收集链接
         max_links_per_type = 100
         all_links_by_type = {}
-        for cloud_type in cloud_types:
-            if cloud_type in merged_by_type:
-                type_links = []
-                for link in merged_by_type[cloud_type][:max_links_per_type]:
-                    type_links.append({
-                        "url": link.get("url", ""),
-                        "password": link.get("password", ""),
-                        "note": link.get("note", ""),
-                        "type": cloud_type,
-                        "source": link.get("source", "")
-                    })
-                if type_links:
-                    all_links_by_type[cloud_type] = type_links
+        
+        # 检查是否有merged_by_type字段（全类型搜索时返回）
+        if merged_by_type:
+            for cloud_type in cloud_types:
+                if cloud_type in merged_by_type:
+                    type_links = []
+                    for link in merged_by_type[cloud_type][:max_links_per_type]:
+                        type_links.append({
+                            "url": link.get("url", ""),
+                            "password": link.get("password", ""),
+                            "note": link.get("note", ""),
+                            "type": cloud_type,
+                            "source": link.get("source", "")
+                        })
+                    if type_links:
+                        all_links_by_type[cloud_type] = type_links
+        else:
+            # 没有merged_by_type字段，可能是特定网盘类型搜索
+            # 尝试从直接结果中提取链接
+            links = search_result.get("links", [])
+            if links:
+                # 确定当前搜索的网盘类型
+                current_src = search_result.get("src", "")
+                if current_src in cloud_types:
+                    # 创建该类型的链接列表
+                    type_links = []
+                    for link in links[:max_links_per_type]:
+                        type_links.append({
+                            "url": link.get("url", ""),
+                            "password": link.get("password", ""),
+                            "note": link.get("note", ""),
+                            "type": current_src,
+                            "source": link.get("source", "")
+                        })
+                    if type_links:
+                        all_links_by_type[current_src] = type_links
+            else:
+                # 尝试另一种可能的数据结构
+                for cloud_type in cloud_types:
+                    if cloud_type in search_result:
+                        type_links = []
+                        for link in search_result[cloud_type][:max_links_per_type]:
+                            type_links.append({
+                                "url": link.get("url", ""),
+                                "password": link.get("password", ""),
+                                "note": link.get("note", ""),
+                                "type": cloud_type,
+                                "source": link.get("source", "")
+                            })
+                        if type_links:
+                            all_links_by_type[cloud_type] = type_links
         
         # 按轮次排列：每轮都是 夸克2条 -> 百度2条 -> UC2条 -> 迅雷2条
         links = []
@@ -432,6 +470,12 @@ class MyPlugin(Star):
                     round_links = type_links[start_idx:end_idx]
                     if round_links:
                         links.extend(round_links)
+        
+        # 如果没有轮次排列的链接，直接返回所有收集到的链接
+        if not links:
+            for cloud_type in cloud_types:
+                if cloud_type in all_links_by_type:
+                    links.extend(all_links_by_type[cloud_type][:max_links_per_type])
         
         logger.info(f"[PanSearch] 提取到 {len(links)} 个链接")
         return links
