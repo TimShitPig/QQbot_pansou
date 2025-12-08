@@ -371,7 +371,10 @@ class MyPlugin(Star):
                 "src": src
             }
             
-            logger.info(f"[PanSearch] 搜索关键词: {keyword}")
+            logger.info(f"[PanSearch] 搜索关键词: {keyword}, 网盘类型: {src}")
+            logger.info(f"[PanSearch] API请求URL: {url}")
+            logger.info(f"[PanSearch] API请求参数: {json.dumps(payload)}")
+            
             response = requests.post(
                 url,
                 json=payload,
@@ -380,12 +383,51 @@ class MyPlugin(Star):
             response.raise_for_status()
             
             result = response.json()
-            if result.get("code") == 0 and result.get("data"):
-                data = result.get("data", {})
-                logger.info(f"[PanSearch] 搜索成功，找到 {data.get('total', 0)} 条结果")
-                return data
+            logger.info(f"[PanSearch] API响应: {json.dumps(result)}")
+            logger.info(f"[PanSearch] API响应类型: {type(result)}")
+            logger.info(f"[PanSearch] API响应包含的键: {list(result.keys())}")
+            
+            if result.get("code") == 0:
+                logger.info(f"[PanSearch] API返回成功状态码")
+                
+                # 检查各种可能的数据结构
+                if result.get("data"):
+                    data = result.get("data", {})
+                    logger.info(f"[PanSearch] 从data字段获取搜索结果")
+                    logger.info(f"[PanSearch] data字段类型: {type(data)}")
+                    logger.info(f"[PanSearch] data包含的键: {list(data.keys())}")
+                    
+                    # 检查data字段是否包含有效数据
+                    if isinstance(data, dict) and (data.get('total', 0) > 0 or data.get('links', []) or data.get('merged_by_type', {})):
+                        logger.info(f"[PanSearch] 搜索成功，找到 {data.get('total', 0)} 条结果")
+                        return data
+                    elif isinstance(data, list):
+                        logger.info(f"[PanSearch] data字段是列表，长度: {len(data)}")
+                        # 如果data是列表，可能直接包含结果
+                        return {"total": len(data), "links": data}
+                
+                # 检查是否有其他可能的数据结构
+                elif "links" in result:
+                    logger.info(f"[PanSearch] 直接从API响应获取links字段")
+                    links = result.get("links", [])
+                    return {"total": len(links), "links": links}
+                
+                elif "merged_by_type" in result:
+                    logger.info(f"[PanSearch] 直接从API响应获取merged_by_type字段")
+                    merged_by_type = result.get("merged_by_type", {})
+                    # 计算总结果数
+                    total = sum(len(links) for links in merged_by_type.values())
+                    return {"total": total, "merged_by_type": merged_by_type}
+                
+                # 如果没有找到预期的数据结构，但返回码是0
+                logger.warning(f"[PanSearch] API返回成功，但数据结构不符合预期: {json.dumps(result)}")
+                return result
             else:
                 logger.error(f"[PanSearch] 搜索失败: {result.get('message', '未知错误')}")
+                # 即使返回码不是0，也尝试返回可能的数据
+                if result.get("data"):
+                    logger.info(f"[PanSearch] API返回错误码，但包含data字段")
+                    return result.get("data", {})
                 return {}
                 
         except requests.exceptions.RequestException as e:
@@ -393,10 +435,13 @@ class MyPlugin(Star):
             return {}
         except Exception as e:
             logger.error(f"[PanSearch] 搜索处理异常: {str(e)}")
+            logger.exception("[PanSearch] 搜索异常详细信息")
             return {}
     
     # 内部方法：提取链接
     def _extract_all_links(self, search_result: Dict) -> List[Dict]:
+        logger.info(f"[PanSearch] 提取链接开始，搜索结果类型: {type(search_result)}, 内容: {json.dumps(search_result)}")
+        logger.info(f"[PanSearch] 搜索结果包含的键: {list(search_result.keys())}")
         merged_by_type = search_result.get("merged_by_type", {})
         
         # 只支持这4种网盘类型，按顺序：夸克、百度、UC、迅雷
@@ -408,10 +453,14 @@ class MyPlugin(Star):
         
         # 检查是否有merged_by_type字段（全类型搜索时返回）
         if merged_by_type:
+            logger.info(f"[PanSearch] 找到merged_by_type字段，类型: {type(merged_by_type)}, 内容: {json.dumps(merged_by_type)}")
+            logger.info(f"[PanSearch] merged_by_type包含的键: {list(merged_by_type.keys())}")
             for cloud_type in cloud_types:
                 if cloud_type in merged_by_type:
+                    logger.info(f"[PanSearch] 找到{cloud_type}类型的链接，数量: {len(merged_by_type[cloud_type])}")
                     type_links = []
                     for link in merged_by_type[cloud_type][:max_links_per_type]:
+                        logger.info(f"[PanSearch] 处理链接: {link}")
                         type_links.append({
                             "url": link.get("url", ""),
                             "password": link.get("password", ""),
@@ -421,13 +470,19 @@ class MyPlugin(Star):
                         })
                     if type_links:
                         all_links_by_type[cloud_type] = type_links
+                        logger.info(f"[PanSearch] 提取到{cloud_type}类型的{len(type_links)}个链接")
         else:
+            logger.info(f"[PanSearch] 没有找到merged_by_type字段，尝试其他数据结构")
             # 没有merged_by_type字段，可能是特定网盘类型搜索
             # 尝试从直接结果中提取链接
             links = search_result.get("links", [])
+            logger.info(f"[PanSearch] 直接links字段数量: {len(links)}")
             if links:
+                logger.info(f"[PanSearch] 找到直接links字段: {len(links)}个链接")
+                logger.info(f"[PanSearch] 第一个链接内容: {links[0] if links else '无'}")
                 # 确定当前搜索的网盘类型
                 current_src = search_result.get("src", "")
+                logger.info(f"[PanSearch] 当前搜索的网盘类型: {current_src}")
                 if current_src in cloud_types:
                     # 创建该类型的链接列表
                     type_links = []
@@ -441,10 +496,13 @@ class MyPlugin(Star):
                         })
                     if type_links:
                         all_links_by_type[current_src] = type_links
+                        logger.info(f"[PanSearch] 提取到{current_src}类型的{len(type_links)}个链接")
             else:
+                logger.info(f"[PanSearch] 没有找到直接links字段，尝试按网盘类型查找")
                 # 尝试另一种可能的数据结构
                 for cloud_type in cloud_types:
                     if cloud_type in search_result:
+                        logger.info(f"[PanSearch] 找到{cloud_type}字段，内容: {search_result[cloud_type]}")
                         type_links = []
                         for link in search_result[cloud_type][:max_links_per_type]:
                             type_links.append({
@@ -456,10 +514,69 @@ class MyPlugin(Star):
                             })
                         if type_links:
                             all_links_by_type[cloud_type] = type_links
+                            logger.info(f"[PanSearch] 提取到{cloud_type}类型的{len(type_links)}个链接")
+            
+            # 尝试一种新的可能数据结构（特定网盘搜索可能返回的结构）
+            if not all_links_by_type and "data" in search_result:
+                logger.info(f"[PanSearch] 尝试从data字段提取链接")
+                data = search_result.get("data", {})
+                logger.info(f"[PanSearch] data字段内容: {json.dumps(data)}")
+                logger.info(f"[PanSearch] data包含的键: {list(data.keys())}")
+                
+                # 检查data字段是否包含links
+                data_links = data.get("links", [])
+                if data_links:
+                    logger.info(f"[PanSearch] 从data字段找到links: {len(data_links)}个链接")
+                    current_src = data.get("src", "") or search_result.get("src", "")
+                    logger.info(f"[PanSearch] 当前搜索的网盘类型: {current_src}")
+                    if current_src in cloud_types:
+                        type_links = []
+                        for link in data_links[:max_links_per_type]:
+                            type_links.append({
+                                "url": link.get("url", ""),
+                                "password": link.get("password", ""),
+                                "note": link.get("note", ""),
+                                "type": current_src,
+                                "source": link.get("source", "")
+                            })
+                        if type_links:
+                            all_links_by_type[current_src] = type_links
+                            logger.info(f"[PanSearch] 从data字段提取到{current_src}类型的{len(type_links)}个链接")
+            
+            # 最后尝试一种可能的数据结构
+            if not all_links_by_type:
+                logger.info(f"[PanSearch] 尝试直接从搜索结果提取所有可能的链接")
+                for key, value in search_result.items():
+                    if isinstance(value, list):
+                        logger.info(f"[PanSearch] 检查{key}字段，类型为列表，长度: {len(value)}")
+                        if value and isinstance(value[0], dict):
+                            logger.info(f"[PanSearch] {key}字段包含字典列表，尝试提取链接")
+                            # 确定可能的网盘类型
+                            possible_types = [t for t in cloud_types if t in str(key).lower() or t in str(search_result.get("src", ""))]
+                            cloud_type = possible_types[0] if possible_types else "other"
+                            
+                            type_links = []
+                            for link in value[:max_links_per_type]:
+                                if "url" in link or "link" in link:
+                                    type_links.append({
+                                        "url": link.get("url", link.get("link", "")),
+                                        "password": link.get("password", link.get("pwd", "")),
+                                        "note": link.get("note", link.get("title", "")),
+                                        "type": cloud_type,
+                                        "source": link.get("source", "")
+                                    })
+                            if type_links:
+                                all_links_by_type[cloud_type] = type_links
+                                logger.info(f"[PanSearch] 直接提取到{cloud_type}类型的{len(type_links)}个链接")
         
         # 按轮次排列：每轮都是 夸克2条 -> 百度2条 -> UC2条 -> 迅雷2条
         links = []
-        max_rounds = max([len(links) // self.links_per_type for links in all_links_by_type.values()], default=0)
+        
+        # 计算最大需要多少轮
+        max_links_per_type = max([len(links) for links in all_links_by_type.values()], default=0)
+        max_rounds = (max_links_per_type + self.links_per_type - 1) // self.links_per_type
+        
+        logger.info(f"[PanSearch] 最大轮次: {max_rounds}, 每轮链接数: {self.links_per_type}")
         
         for round_num in range(max_rounds):
             for cloud_type in cloud_types:
@@ -469,12 +586,15 @@ class MyPlugin(Star):
                     end_idx = start_idx + self.links_per_type
                     round_links = type_links[start_idx:end_idx]
                     if round_links:
+                        logger.info(f"[PanSearch] 第{round_num+1}轮，{cloud_type}类型，添加{len(round_links)}个链接")
                         links.extend(round_links)
         
         # 如果没有轮次排列的链接，直接返回所有收集到的链接
         if not links:
+            logger.info(f"[PanSearch] 没有轮次排列的链接，直接返回所有收集到的链接")
             for cloud_type in cloud_types:
                 if cloud_type in all_links_by_type:
+                    logger.info(f"[PanSearch] 直接添加{cloud_type}类型的{len(all_links_by_type[cloud_type])}个链接")
                     links.extend(all_links_by_type[cloud_type][:max_links_per_type])
         
         logger.info(f"[PanSearch] 提取到 {len(links)} 个链接")
@@ -574,15 +694,33 @@ class MyPlugin(Star):
         try:
             # 搜索资源
             search_result = self._search_resources(keyword, cloud_type)
+            logger.info(f"[PanSearch] _handle_search: 搜索结果: {json.dumps(search_result)}")
+            
             if not search_result:
+                logger.info(f"[PanSearch] _handle_search: 搜索结果为空")
                 return ">>>查询失败<<<<\n--------------------\n剧名宁少写，不多写、错写\n不要标点、演员名、第几季\n如再查询不到@群主帮你找"
             
-            total = search_result.get("total", 0)
+            # 计算可能的总结果数
+            if isinstance(search_result, dict):
+                # 尝试从不同字段获取总结果数
+                total = search_result.get("total", 0)
+                if total == 0:
+                    # 计算实际存在的链接数
+                    if "merged_by_type" in search_result:
+                        total = sum(len(links) for links in search_result["merged_by_type"].values())
+                    elif "links" in search_result:
+                        total = len(search_result["links"])
+            else:
+                total = 0
+            
+            logger.info(f"[PanSearch] _handle_search: 总结果数: {total}")
+            
             if total == 0:
                 return ">>>查询失败<<<<\n--------------------\n剧名宁少写，不多写、错写\n不要标点、演员名、第几季\n如再查询不到@群主帮你找"
             
             # 提取所有链接
             links = self._extract_all_links(search_result)
+            logger.info(f"[PanSearch] _handle_search: 提取到的链接数量: {len(links)}")
             if not links:
                 return ">>>查询失败<<<<\n--------------------\n剧名宁少写，不多写、错写\n不要标点、演员名、第几季\n如再查询不到@群主帮你找"
             
