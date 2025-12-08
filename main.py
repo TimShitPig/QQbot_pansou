@@ -200,16 +200,31 @@ class MyPlugin(Star):
             yield event.plain_result(help_message)
             return
         
-        # 处理搜索指令（仅支持：搜XX）
+        # 处理搜索指令（支持：搜XX、百度XX、夸克XX、UCXX、迅雷XX）
         search_patterns = [
-            r'^搜(.+)$',
+            r'^搜(.+)$',  # 原有的搜索格式
+            r'^百度(.+)$',  # 百度网盘搜索
+            r'^夸克(.+)$',  # 夸克网盘搜索
+            r'^UC(.+)$',   # UC网盘搜索
+            r'^迅雷(.+)$',  # 迅雷网盘搜索
         ]
         
         keyword = None
+        cloud_type = "all"  # 默认搜索所有网盘
+        
         for pattern in search_patterns:
             match = re.match(pattern, message_str)
             if match:
                 keyword = match.group(1).strip()
+                # 根据匹配的模式确定网盘类型
+                if pattern == r'^百度(.+)$':
+                    cloud_type = "baidu"
+                elif pattern == r'^夸克(.+)$':
+                    cloud_type = "quark"
+                elif pattern == r'^UC(.+)$':
+                    cloud_type = "uc"
+                elif pattern == r'^迅雷(.+)$':
+                    cloud_type = "xunlei"
                 break
         
         if keyword:
@@ -219,7 +234,7 @@ class MyPlugin(Star):
             # 记录开始时间
             start_time = datetime.now()
             
-            result = self._handle_search(keyword, user_id)
+            result = self._handle_search(keyword, user_id, cloud_type)
             
             # 计算耗时
             end_time = datetime.now()
@@ -347,13 +362,13 @@ class MyPlugin(Star):
             del self.user_sessions[user_id]
     
     # 内部方法：搜索资源
-    def _search_resources(self, keyword: str) -> Dict:
+    def _search_resources(self, keyword: str, src: str = "all") -> Dict:
         try:
             url = f"{self.pansou_api_url}/api/search"
             payload = {
                 "kw": keyword,
                 "res": "merge",
-                "src": "all"
+                "src": src
             }
             
             logger.info(f"[PanSearch] 搜索关键词: {keyword}")
@@ -509,12 +524,12 @@ class MyPlugin(Star):
         return output, total_pages
     
     # 内部方法：处理搜索
-    def _handle_search(self, keyword: str, user_id: str) -> str:
+    def _handle_search(self, keyword: str, user_id: str, cloud_type: str = "all") -> str:
         self._cleanup_expired_sessions()
         
         try:
             # 搜索资源
-            search_result = self._search_resources(keyword)
+            search_result = self._search_resources(keyword, cloud_type)
             if not search_result:
                 return ">>>查询失败<<<<\n--------------------\n剧名宁少写，不多写、错写\n不要标点、演员名、第几季\n如再查询不到@群主帮你找"
             
